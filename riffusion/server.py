@@ -19,7 +19,7 @@ from riffusion.datatypes import InferenceInput, InferenceOutput
 from riffusion.riffusion_pipeline import RiffusionPipeline
 from riffusion.spectrogram_image_converter import SpectrogramImageConverter
 from riffusion.spectrogram_params import SpectrogramParams
-from riffusion.util import base64_util
+from riffusion.util import base64_util, audio_util
 
 # Flask app with CORS
 app = flask.Flask(__name__)
@@ -111,6 +111,90 @@ def run_inference():
     logging.info(f"Request took {time.time() - start_time:.2f} s")
 
     return response
+
+
+@app.route("/run_my_riffsion/", methods=["POST"])
+def run_my_riffsion():
+    """
+    Execute the riffusion model as an API.
+
+    Inputs:
+        Serialized JSON of the InferenceInput dataclass
+
+    Returns:
+        Serialized JSON of the InferenceOutput dataclass
+    """
+    start_time = time.time()
+
+    # Parse the payload as JSON
+    json_data = json.loads(flask.request.data)
+
+    # Covert audio to image
+    imageName=json_data.get('requestId')+"_image"
+    audioBase64_to_image(
+        audioBase64=json_data.get('audioBase64'),
+        imageName=imageName
+    )
+    seed_image_id = {"seed_image_id":imageName}
+    json_data.update(seed_image_id)
+
+    # Log the request
+    logging.info(json_data)
+
+    # Parse an InferenceInput dataclass from the payload
+    try:
+        inputs = dacite.from_dict(InferenceInput, json_data)
+    except dacite.exceptions.WrongTypeError as exception:
+        logging.info(json_data)
+        return str(exception), 400
+    except dacite.exceptions.MissingValueError as exception:
+        logging.info(json_data)
+        return str(exception), 400
+
+    response = compute_request(
+        inputs=inputs,
+        seed_images_dir=SEED_IMAGES_DIR,
+        pipeline=PIPELINE,
+    )
+
+    # Log the total time
+    logging.info(f"Request took {time.time() - start_time:.2f} s")
+
+    return response
+
+
+def audioBase64_to_image(
+    audioBase64: str,
+    imageName: str,
+    step_size_ms: int = 10,
+    num_frequencies: int = 512,
+    min_frequency: int = 0,
+    max_frequency: int = 10000,
+    window_duration_ms: int = 100,
+    padded_duration_ms: int = 400,
+    power_for_image: float = 0.25,
+    stereo: bool = False,
+    device: str = "cuda",
+):
+    audioSegment = audio_util.base64_to_segment(audioBase64)
+    params = SpectrogramParams(
+        sample_rate=audioSegment.frame_rate,
+        stereo=stereo,
+        window_duration_ms=window_duration_ms,
+        padded_duration_ms=padded_duration_ms,
+        step_size_ms=step_size_ms,
+        min_frequency=min_frequency,
+        max_frequency=max_frequency,
+        num_frequencies=num_frequencies,
+        power_for_image=power_for_image,
+    )
+
+    converter = SpectrogramImageConverter(params=params, device=device)
+
+    pil_image = converter.spectrogram_image_from_audio(audioSegment)
+
+    pil_image.save(".\\seed_images\\"+imageName+".png", exif=pil_image.getexif(), format="PNG")
+    print(f"Wrote {imageName}")
 
 
 def compute_request(

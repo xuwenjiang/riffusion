@@ -2,12 +2,15 @@
 Audio utility functions.
 """
 
+import base64
 import io
 import typing as T
+import wave
 
 import numpy as np
 import pydub
 from scipy.io import wavfile
+from io import BytesIO
 
 
 def audio_from_waveform(
@@ -97,3 +100,22 @@ def overlay_segments(segments: T.Sequence[pydub.AudioSegment]) -> pydub.AudioSeg
         else:
             output = output.overlay(segment)
     return output
+
+def base64_to_segment(audioBase64: str) -> pydub.AudioSegment:
+    format, data = audioBase64.split(';')
+    format = format.split('/')[-1]
+    data = data.split(',')[-1]
+    data = base64.b64decode(audioBase64)
+    sample_width = 2
+    frame_rate = 44100
+    channels = 1
+    if format == "wav":
+        wav = wave.open(data, "rb")
+        sample_width = wav.getsampwidth()
+        frame_rate = wav.getframerate()
+        channels = wav.getnchannels()
+        wav.close()
+    return pydub.AudioSegment(data=data, sample_width=sample_width, frame_rate=frame_rate, channels=channels)
+
+def base64_to_segment2(audioBase64: str) -> pydub.AudioSegment:
+    return pydub.AudioSegment(data=base64.b64decode(audioBase64), sample_width=2, frame_rate=44100, channels=1)
