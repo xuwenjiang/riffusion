@@ -101,7 +101,7 @@ def overlay_segments(segments: T.Sequence[pydub.AudioSegment]) -> pydub.AudioSeg
             output = output.overlay(segment)
     return output
 
-def base64_to_segment(base64_audio: str) -> pydub.AudioSegment:
+def base64_to_segment(base64_audio: str, target_length_ms: int = 5120) -> pydub.AudioSegment:
     try:
         format, data = base64_audio.split(';')
         format = format.split('/')[-1]
@@ -112,6 +112,16 @@ def base64_to_segment(base64_audio: str) -> pydub.AudioSegment:
         audio_stream = io.BytesIO(audio_data)
         # Read the byte-stream as an AudioSegment
         audio_segment = pydub.AudioSegment.from_file(audio_stream)
+
+        # Adjust the audio segment length to the target length
+        audio_length_ms = len(audio_segment)
+        if audio_length_ms < target_length_ms:
+            silence_duration = target_length_ms - audio_length_ms
+            silence_segment = pydub.AudioSegment.silent(duration=silence_duration)
+            audio_segment += silence_segment
+        elif audio_length_ms > target_length_ms:
+            audio_segment = audio_segment[:target_length_ms]
+
         return audio_segment
     except (base64.binascii.Error, ValueError) as e:
         print(f"An error occurred during base64 decoding: {e}")
