@@ -13,7 +13,7 @@ from pathlib import Path
 import dacite
 import flask
 import PIL
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 
 from riffusion.datatypes import InferenceInput, InferenceOutput
 from riffusion.riffusion_pipeline import RiffusionPipeline
@@ -114,6 +114,7 @@ def run_inference():
 
 
 @app.route("/run_my_riffsion/", methods=["POST"])
+@cross_origin()
 def run_my_riffsion():
     """
     Execute the riffusion model as an API.
